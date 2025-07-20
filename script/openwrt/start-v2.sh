@@ -12,7 +12,7 @@ echo "configfile:$configfile, ipfile:$ipfile"
 
 ipzipfile="ip.zip"
 
-//for test
+#or test
 rm -rf *.csv
 if [[ -e $ipzipfile ]]; then
   rm -rf $ipzipfile
@@ -126,21 +126,21 @@ if [ -z $ipfile ]; then
     echo "Can't download the ip zip file, Check whether the agent software is disabled."
   fi
 
-  echo "2.Select the ip address of the desired port."
-  port=$(yq eval ".CF_ADDR" $configfile)
-  if [ -z $port ]; then
-    port=443
-  fi
+  # echo "2.Select the ip address of the desired port."
+#   port=$(yq eval ".CF_ADDR" $configfile)
+#   if [ -z $port ]; then
+#     port=443
+#   fi
 
-  ip_file="./$port/ALL.txt"
-  # for file in $(find . -type f -name "*-[0-1]-$port.txt"); do
-  #   echo "handling: $file"
-  #   cat "$file" >>tmp.txt
-  # done
+#   ip_file="./$port/ALL.txt"
+#   # for file in $(find . -type f -name "*-[0-1]-$port.txt"); do
+#   #   echo "handling: $file"
+#   #   cat "$file" >>tmp.txt
+#   # done
 
-  if [ -e "$ip_file" ]; then
-    cat "$ip_file" | sort -u >ip.txt
-  fi
+#   if [ -e "$ip_file" ]; then
+#     cat "$ip_file" | sort -u >ip.txt
+#   fi
 fi
 
 echo "Run scripts to test speed and update dns records."
@@ -194,21 +194,68 @@ else
   CF_ADDR=" -tp 443"
 fi
 
+# 定义测速函数
+run_speedtest() {
+  local ip_file=$1
+  local output=$2
+  local cmd_args="$CFST_URL_R -t $CFST_T -n $CFST_N -dn $CFST_DN -tl $CFST_TL -tll $CFST_TLL -sl $CFST_SL -p $CFST_P"
+  
+  if [ ! -z "$ip_file" ]; then
+    cmd_args="$cmd_args -f $ip_file"
+  fi
+  
+  if [ ! -z "$output" ]; then
+    cmd_args="$cmd_args -o $output"
+  fi
+  
+  if [ "$IP_ADDR" != "ipv6" ] && [ ! -z "$CF_ADDR" ]; then
+    cmd_args="$cmd_args $CF_ADDR"
+  fi
+  
+  if [ ! -z "$USECC" ] && [ ! -z "$CCODE_IS" ]; then
+    cmd_args="$cmd_args $USECC $CCODE_IS"
+  fi
+  
+  echo "./CloudflareST $cmd_args"
+  ./CloudflareST $cmd_args
+}
+
 if [ -z "$ipfile" ]; then
   ipflag=""
+  port=$(yq eval ".CF_ADDR" $configfile)
+  if [ -z $port ]; then
+    port=443
+  fi
+  
+  if [ ! -z "$CCODE" ]; then
+    # 如果配置了CCODE，按逗号分割为数组，循环每个国家代码进行测速
+    IFS=',' read -ra cc_arr <<< "$CCODE"
+    echo "国家代码列表: ${cc_arr[*]}"
+    CCODE_IS=""
+    USECC=""
+    for cc in "${cc_arr[@]}"; do
+      cc=$(echo $cc | xargs)  # 去除可能的空格
+      echo "处理国家代码: $cc"
+      ipfile_path="./$port/${cc}.txt"
+      output_file="${cc}.csv"
+      
+      if [ -f "$ipfile_path" ]; then
+        echo "找到IP文件: $ipfile_path"
+        run_speedtest "$ipfile_path" "$output_file"
+      else
+        echo "警告: IP文件 $ipfile_path 不存在，跳过此国家代码"
+      fi
+    done
+  else
+    run_speedtest "$ipfile" "result.csv"
+  fi
 else
-  ipflag="-f "
+  # 使用用户指定的IP文件进行测速
+  run_speedtest "$ipfile" "result.csv"
 fi
 
-if [ "$IP_ADDR" = "ipv6" ]; then
-  #开始优选IPv6
-  ./CloudflareST $CFST_URL_R -t $CFST_T -n $CFST_N -dn $CFST_DN -tl $CFST_TL -tll $CFST_TLL -sl $CFST_SL -p $CFST_P $ipflag $ipfile $USECC $CCODE_IS
-  echo "./CloudflareST $CFST_URL_R -t $CFST_T -n $CFST_N -dn $CFST_DN -tl $CFST_TL -tll $CFST_TLL -sl $CFST_SL -p $CFST_P $ipflag $ipfile $CF_ADDR $USECC $CCODE_IS"
-else
-  #开始优选IPv4
-  echo "./CloudflareST $CFST_URL_R -t $CFST_T -n $CFST_N -dn $CFST_DN -tl $CFST_TL -tll $CFST_TLL -sl $CFST_SL -p $CFST_P $ipflag $ipfile $CF_ADDR $USECC $CCODE_IS"
-  ./CloudflareST $CFST_URL_R -t $CFST_T -n $CFST_N -dn $CFST_DN -tl $CFST_TL -tll $CFST_TLL -sl $CFST_SL -p $CFST_P $ipflag $ipfile $CF_ADDR $USECC $CCODE_IS
-fi
+
+
 echo "测速完毕"
 if [ "$pause" = "false" ]; then
   echo "按要求未重启科学上网服务"
