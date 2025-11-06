@@ -73,3 +73,8 @@ telegramBotUserId:
 #微信推送, 通过https://sct.ftqq.com/r/13223 注册并登录server酱，取得sendKey
 sendKey:
 
+#微信推送api
+wxpushAPI:
+
+wxToken:
+

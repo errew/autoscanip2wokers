@@ -46,6 +46,8 @@ telegramBotToken=$(yq eval ".telegramBotToken" $configfile)
 telegramBotUserId=$(yq eval ".telegramBotUserId" $configfile)
 sendType=$(yq eval ".sendType" $configfile)
 sendKey=$(yq eval ".sendKey" $configfile)
+wxpushAPI=$(yq eval ".wxpushAPI" $configfile)
+wxToken=$(yq eval ".wxToken" $configfile)
 
 ChkHostnameAndCoutryCode() {
   IFS=, read -r -a domains <<<"$hostname"
@@ -256,10 +258,13 @@ if [ ! -z "$sendType" ]; then
     source ./msg/cf_push
   elif [[ $sendType -eq 2 ]]; then
     source ./msg/wxsend_jiang.sh
+    source ./msg/wxpush.sh
   elif [[ $sendType -eq 3 ]]; then
     source ./msg/cf_push
     source ./msg/wxsend_jiang.sh
+    source ./msg/wxpush.sh
   else
     echo "$sendType is invalid type!"
   fi
 fi
+
